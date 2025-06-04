@@ -1,89 +1,63 @@
-# 声明伪目标，告诉 make 这些目标不是文件，
-# 如果目标是个文件且文件存在，没有变化，make 就不会执行后面的命令
-.PHONY: kernel clean qemu qemu-gdb
+# 避免 target kernel 被当作目录名导致 make 不进行编译  
+.PHONY: qemu qemu-gdb clean kernel
 
-# 定义变量：kernel，内核目录（保持你的原始命名）
-K := kernel
+# 内核目录
+K = kernel
 
-# 定义编译后的目标文件（保持简单，后续可以自动收集）
-OBJS = $(K)/entry.o $(K)/start.o
-
-# 最终链接生成的 ELF 文件名
-KERNEL_ELF = kernel.elf
-
-
-# 使用 qemu 的系统模拟一台 riscv64 的硬件
+# 交叉编译工具链 
+CC = riscv64-unknown-elf-gcc
 QEMU = qemu-system-riscv64
-
-# RISC-V 交叉调试
 GDB = riscv64-unknown-elf-gdb
 
-# RISC-V 交叉编译
-CC = riscv64-unknown-elf-gcc
+# qemu 模拟的计算机 CPU 的核心数
+CPUS = 3
 
-# RISC-V 交叉链接
-LD = riscv64-unknown-elf-ld
+# 编译选项
+CFLAGS = -Wall -Werror -O0
+CFLAGS += -fno-omit-frame-pointer -ggdb
+CFLAGS += -MD -mcmodel=medany
+CFLAGS += -ffreestanding -fno-common -nostdlib
+CFLAGS += -mno-relax
+CFLAGS += -fno-stack-protector -fno-pie -no-pie
+CFLAGS += -z max-page-size=4096
+# -Wall 打开所有警告
+# -Werror将所有警告认为是错误
+# -O0不进行编译器优化
+# -fno-omit-frame-pointer生成栈帧的相关信息
+# -ggdb生成调试信息
+# -MD生成独立的.d文件，.d包含依赖文件
+# -mcmodel=medany针对riscv构架的代码模型
+# -ffreestanding-fno-common-nostdlib-mno-relax不使用标准C库
+# -ffreestanding:生成独立运行的代码，即代码不依赖于标准库或操作系统提供的额外支持。通常用于裸机嵌入式系统或操作系统内核的开发
+# -fno-common:禁止编译器将未初始化的全局变量和函数定义放置在公共（common）段中。为了避免因为全局变量在多个源文件中重复定义而导致链接错误。
+# -nostdlib:不链接标准C库
+# -mno-relax:不要使用指合重定位优化。在链接阶段可能会进行指合重定位，但该选项可以避免这种情况，确保代码的准确性
+# -fno-stack-protector不使用栈溢出保护机制
+# -fno-pie-no-pie不生成pie
+# -z max-page-size=4096 配置页大小
 
-# 反汇编工具
-OBJDUMP = riscv64-unknown-elf-objdump
-
-
-# GCC 编译参数
-CFLAGS = -Wall -Werror              # 打开所有警告并把警告当错误
-CFLAGS += -O                        # 打开基本优化
-CFLAGS += -fno-omit-frame-pointer   # 不省略帧指针（便于调试栈帧）
-CFLAGS += -ggdb -gdwarf-2           # 生成 GDB 所需调试信息
-CFLAGS += -MD                       # 生成依赖文件（.d）
-CFLAGS += -mcmodel=medany           # 中等地址模型，适合 RISC-V kernel
-CFLAGS += -fno-common -nostdlib     # 禁止多个全局变量重复定义，不链接标准库
-CFLAGS += -I$(K)                    # 添加内核目录到头文件搜索路径
-
-# 链接选项
-LDFLAGS = -T $(K)/kernel.ld -nostdlib
-
-# 启动 qemu 的参数
-QEMUOPTS = 	-machine virt  			# virt 虚拟机
-QEMUOPTS += -bios none   		   	# 不使用 bios
-QEMUOPTS += -kernel $(KERNEL_ELF)   # 加载编译好的 kernel
-QEMUOPTS += -m 128M                 # 分配 128MB 内存
-QEMUOPTS += -smp 4                 	# 模拟 4 核
-QEMUOPTS += -nographic             	# 禁止图形界面，在终端运行
-
-
-# 默认目标：构建内核,链接所有的 .o 文件，生成 kernel.elf，
-# 然后将对 kernel.elf 反汇编得到的结果重定向到到 kernel.asm
-$(KERNEL_ELF): $(OBJS) $(K)/kernel.ld
-	$(LD) $(LDFLAGS) -o $@ $(OBJS)
-	$(OBJDUMP) -S $@ > $(K)/kernel.asm
-
-# 把 kernel 目标指向 kernel.elf 文件，方便写命令时输入短名字
-kernel: $(KERNEL_ELF)
-
-# 编译汇编文件（.S）为目标文件（.o）
-$(K)/%.o: $(K)/%.S
-	$(CC) $(CFLAGS) -c $< -o $@
-
-# 编译 C 源文件为 .o 文件（注意路径和 %.o 匹配）
-$(K)/%.o: $(K)/%.c
-	$(CC) $(CFLAGS) -c $< -o $@
+# 启动 qemu 需要的参数
+QEMUOPTS = -machine virt -bios none -kernel $(K)/kernel.elf -m 128M -smp $(CPUS) -nographic
+# -machine virt 指定 qemu 模拟的硬件平台为 RISCV VirtIO 机器，virt 是一个通用的 RISCV 平台
+# -bios none 不加载 BIOS 或 bootloader，直接从内核启动
+# -kernel $(K)/kernel.elf 指定要运行的内核镜像文件，qemu 会将其加载到内存 0x80000000 出执行
+# -m 128M 设置虚拟机的内存大小为 128MB
+# -smp $(CPUS) 设置虚拟机的 CPU 核心数
+# -nographic 禁用图形界面，所有输出通过终端显示
 
 
-# 启动 QEMU 模拟器来运行内核
+# 编译出 kernel.elf 文件
+kernel:
+	$(CC) $(CFLAGS) \
+	$(K)/entry.S \
+	$(K)/start.c \
+	-T $(K)/kernel.ld \
+	-o $(K)/kernel.elf
+
+# 启动 qemu
 qemu: kernel
 	$(QEMU) $(QEMUOPTS)
 
-
-
-
-# 清理所有编译生成的文件
+# 清理中间文件
 clean:
-	rm -f $(KERNEL_ELF) $(K)/kernel.asm $(K)/*.o $(K)/*.d .gdbinit
-
-# 自动包含头文件依赖，这样源代码里加头文件会自动追踪变化
--include $(OBJS:.o=.d)
-
-help:
-	@echo "  make kernel  	- 编译内核"
-	@echo "  make qemu    	- 运行QEMU"
-	@echo "  make qemu-gdb 	- 启动调试"
-	@echo "  make clean   	- 清理构建文件"
+	rm -f $(K)/kernel.elf $(K)/kernel.d
