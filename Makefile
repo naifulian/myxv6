@@ -58,6 +58,12 @@ kernel:
 qemu: kernel
 	$(QEMU) $(QEMUOPTS)
 
+# 默认
+qemu-gdb: kernel
+	@echo "现在在另一个终端中启用 GDB"
+	@$(QEMU) $(QEMUOPTS) -s -S
+	
+
 # 清理中间文件
 clean:
 	rm -f $(K)/kernel.elf $(K)/kernel.d
