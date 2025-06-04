@@ -1,44 +1,33 @@
-# 避免 target kernel 被当作目录名导致 make 不进行编译  
+# 声明伪目标，避免 target 与同名文件或文件夹重名导致 make 不工作
 .PHONY: qemu qemu-gdb clean kernel
 
 # 内核目录
 K = kernel
 
-# 交叉编译工具链 
-CC = riscv64-unknown-elf-gcc
-QEMU = qemu-system-riscv64
-GDB = riscv64-unknown-elf-gdb
+# 工具链 
+CC = riscv64-unknown-elf-gcc 		# RISCV 交叉编译器
+QEMU = qemu-system-riscv64			# qemu 模拟器
+GDB = riscv64-unknown-elf-gdb 		# RISCV 使用的 GDB
 
 # qemu 模拟的计算机 CPU 的核心数
 CPUS = 3
 
 # 编译选项
-CFLAGS = -Wall -Werror -O0
-CFLAGS += -fno-omit-frame-pointer -ggdb
-CFLAGS += -MD -mcmodel=medany
-CFLAGS += -ffreestanding -fno-common -nostdlib
-CFLAGS += -mno-relax
-CFLAGS += -fno-stack-protector -fno-pie -no-pie
-CFLAGS += -z max-page-size=4096
-# -Wall 打开所有警告
-# -Werror将所有警告认为是错误
-# -O0不进行编译器优化
-# -fno-omit-frame-pointer生成栈帧的相关信息
-# -ggdb生成调试信息
-# -MD生成独立的.d文件，.d包含依赖文件
-# -mcmodel=medany针对riscv构架的代码模型
-# -ffreestanding-fno-common-nostdlib-mno-relax不使用标准C库
-# -ffreestanding:生成独立运行的代码，即代码不依赖于标准库或操作系统提供的额外支持。通常用于裸机嵌入式系统或操作系统内核的开发
-# -fno-common:禁止编译器将未初始化的全局变量和函数定义放置在公共（common）段中。为了避免因为全局变量在多个源文件中重复定义而导致链接错误。
-# -nostdlib:不链接标准C库
-# -mno-relax:不要使用指合重定位优化。在链接阶段可能会进行指合重定位，但该选项可以避免这种情况，确保代码的准确性
-# -fno-stack-protector不使用栈溢出保护机制
-# -fno-pie-no-pie不生成pie
-# -z max-page-size=4096 配置页大小
+CFLAGS = -Wall -Werror -O0 							# 启用所有警告，视警告为编译错误，禁用优化
+CFLAGS += -fno-omit-frame-pointer -ggdb 			# 强制保留栈帧指针，生成 GBD 专用的调试信息
+CFLAGS += -MD 										# 自动生成 .d 依赖文件，当 entry.S 或 start.c 被修改时，make 能感知到并重新编译
+CFLAGS += -mcmodel=medany 							# 使用中等代码模型，允许代码和静态数据位于任意 32 位地址开始(0x80000000)
+CFLAGS += -ffreestanding 							# 编译独立环境程序（不依赖操作系统或标准库）。
+CFLAGS += -fno-common 			 					# 禁止未初始化全局变量放在 COMMON 段,强制显式定义全局变量,避免多个文件定义同名变量导致链接冲突
+CFLAGS += -nostdlib									# 不链接标准库
+CFLAGS += -mno-relax 								# 禁用链接器松弛优化，RISC-V 的 auipc/jalr 等指令可能被优化为 jal，避免因优化导致引导代码失效（如 OpenSBI 跳转地址错误）。
+CFLAGS += -fno-stack-protector -fno-pie -no-pie 	# 禁用栈溢出保护，禁用位置无关可执行文件
+CFLAGS += -z max-page-size=4096 					# 设置内存页大小为 4KB
 
-# 启动 qemu 需要的参数
+
+# qemu 的启动参数
 QEMUOPTS = -machine virt -bios none -kernel $(K)/kernel.elf -m 128M -smp $(CPUS) -nographic
-# -machine virt 指定 qemu 模拟的硬件平台为 RISCV VirtIO 机器，virt 是一个通用的 RISCV 平台
+# -machine virt 指定 qemu 模拟的硬件平台为 RISCV VirtIO，virt 是一个通用的 RISCV 平台
 # -bios none 不加载 BIOS 或 bootloader，直接从内核启动
 # -kernel $(K)/kernel.elf 指定要运行的内核镜像文件，qemu 会将其加载到内存 0x80000000 出执行
 # -m 128M 设置虚拟机的内存大小为 128MB
@@ -54,16 +43,17 @@ kernel:
 	-T $(K)/kernel.ld \
 	-o $(K)/kernel.elf
 
-# 启动 qemu
+# 启动 qemu 然后直接运行
 qemu: kernel
 	$(QEMU) $(QEMUOPTS)
 
-# 默认
+# 启动 qemu 然后等待 gdb 远程调试连接
 qemu-gdb: kernel
-	@echo "现在在另一个终端中启用 GDB"
+	@echo "现在在另一个终端中启动 GDB"
 	@$(QEMU) $(QEMUOPTS) -s -S
-	
+# -s 启动 qemu 内置的 GDB 服务器，使用默认端口 1234，等价于 -gdb tcp::1234
+# -S 在启动时暂停 CPU，等待 GDB 远程连接
 
-# 清理中间文件
+# 清理编译产物
 clean:
 	rm -f $(K)/kernel.elf $(K)/kernel.d
