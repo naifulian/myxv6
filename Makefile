@@ -47,6 +47,12 @@ kernel:
 qemu: kernel
 	$(QEMU) $(QEMUOPTS)
 
+# 启动 qemu 然后等待 gdb 远程调试连接
+qemu-gdb: kernel
+	@echo "现在在另一个终端中启动 GDB"
+	@$(QEMU) $(QEMUOPTS) -s -S
+# -s 启动 qemu 内置的 GDB 服务器，使用默认端口 1234，等价于 -gdb tcp::1234
+# -S 在启动时暂停 CPU，等待 GDB 远程连接
 
 # 清理编译产物
 clean:

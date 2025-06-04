@@ -1,6 +1,6 @@
 .vscode
 *.o
 *.asm
-.gdbinit
 *.elf
 *.d
+.gitignore
