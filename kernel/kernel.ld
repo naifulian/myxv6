@@ -1,39 +1,55 @@
-OUTPUT_ARCH( "riscv" )
-ENTRY( _entry )
+OUTPUT_ARCH("riscv")       /* 指定目标架构为 RISC-V，生成符合该 ISA 的 ELF 文件 */
 
+ENTRY(_entry)              /* 指定程序入口点为 _entry，CPU 将从这个符号处的地址开始执行 */
+
+/*SECTIONS 控制可执行文件的各个段在内存中的顺序和布局*/
 SECTIONS
 {
-  . = 0x80000000;
+  . = 0x80000000;          /* 设置链接起始地址为 0x80000000，即 entry.S 中定义的 _entry 符号*/
 
-  .text : {
-    *(.text .text.*)
-    . = ALIGN(0x1000);
-    _trampoline = .;
-    *(trampsec)
-    . = ALIGN(0x1000);
-    PROVIDE(etext = .);
+  .text : {                /* 定义 .text 段：存放所有代码段（即机器指令） */
+    *(.text .text.*)       /* 把所有名为 .text 或以 .text. 开头的段都合并进来，支持模块化组织代码 */
+
+    . = ALIGN(0x1000);     /* 将当前位置对齐到 4KB 边界，为 trampoline 代码页对齐 */
+    
+    _trampoline = .;       /* 定义符号 _trampoline，记录 trampoline 跳板代码的起始地址 */
+    
+    *(trampsec)            /* 将所有属于 trampsec 段（跳板段，可能用于上下文切换或页表过渡）链接进来 */
+    
+    . = ALIGN(0x1000);     /* 再次 4KB 对齐，为后续段做好边界，避免段交叉 */
+
+    PROVIDE(etext = .);    /* 提供符号 etext，表示 .text 段的结束地址，内核可能会使用这个地址做内存管理 */
   }
 
-  .rodata : {
-    . = ALIGN(16);
-    *(.srodata .srodata.*) /* do not need to distinguish this from .rodata */
-    . = ALIGN(16);
-    *(.rodata .rodata.*)
+  .rodata : {              /* 只读数据段：如字符串常量、只读查找表等 */
+    . = ALIGN(16);         /* 对齐到 16 字节边界，满足 RISC-V 对齐约束，提高访问效率 */
+
+    *(.srodata .srodata.*) /* 合并所有小型只读数据（Small Read-Only Data），GCC 有专门优化这种变量访问 */
+    
+    . = ALIGN(16);         /* 再次对齐，分隔小数据段与常规只读段 */
+    
+    *(.rodata .rodata.*)   /* 合并所有常规只读数据 */
   }
 
-  .data : {
-    . = ALIGN(16);
-    *(.sdata .sdata.*) /* do not need to distinguish this from .data */
-    . = ALIGN(16);
-    *(.data .data.*)
+  .data : {                /* 数据段：存放已初始化的全局变量或静态变量 */
+    . = ALIGN(16);         /* 对齐到 16 字节 */
+    
+    *(.sdata .sdata.*)     /* 包含所有小型已初始化数据变量（Small Data），适用于快速访问 */
+
+    . = ALIGN(16);         /* 对齐后再合并常规已初始化变量段 */
+    
+    *(.data .data.*)       /* 常规初始化变量：如 int x = 5; */
   }
 
-  .bss : {
-    . = ALIGN(16);
-    *(.sbss .sbss.*) /* do not need to distinguish this from .bss */
-    . = ALIGN(16);
-    *(.bss .bss.*)
+  .bss : {                 /* BSS段：未初始化的全局/静态变量，编译时不占据空间，运行时由启动代码清零 */
+    . = ALIGN(16);         /* 对齐到 16 字节 */
+
+    *(.sbss .sbss.*)       /* 包含所有小型未初始化变量 */
+
+    . = ALIGN(16);         /* 对齐后合并常规未初始化变量 */
+    
+    *(.bss .bss.*)         /* 常规 BSS 段变量：如 int x; 未显式初始化的静态或全局变量 */
   }
 
-  PROVIDE(end = .);
+  PROVIDE(end = .);        /* 定义符号 end，表示程序最后一个段的结束地址，常用于内存分配器的起始位置 */
 }

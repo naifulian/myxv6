@@ -3,6 +3,9 @@
 .global _entry
 _entry:
         # sp = stack0 + (hartid * 4096)
+        # hart0：sp = stack0 + 1 * 4KB
+        # hart1：sp = stack1 + 2 * 8KB
+        # hart3：sp = stack2 + 3 * 12KB
         la sp, stack0       # 加载 stack0 的地址到栈指针寄存器 sp
         li a0, 1024*4       # 加载常量到寄存器
         csrr a1, mhartid    # 读取当前硬件线程 id
