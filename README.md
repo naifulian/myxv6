@@ -140,9 +140,11 @@ CSR 寄存器又叫做控制和状态寄存器(Control and Status Registers)，�
 
 ### 普通指令
 
+// TODO
 
 ### 特权级指令
 
+// TODO
 
 ## RISCV 特权级机制
 
@@ -180,6 +182,7 @@ RISCV 的分层特权级主要有这两点好处：
 
 ## 编译系统
 
+// TODO
 
 ## ELF 格式
 
@@ -209,6 +212,27 @@ ELF 文件的基本结构：
 - riscv64-unknown-elf-objdump：反汇编工具
 - riscv64-unknown-elf-gdb：调试器
 
+## 编译 riscv64-unknown 工具链
+
+```bash
+# 安装相关依赖
+sudo apt install libncurses-dev python3 python3-dev texinfo libreadline-dev       libgmp3-dev
+# 从清华大学开源镜像站下载gdb源码(约23MB)
+wget https://mirrors.tuna.tsinghua.edu.cn/gnu/gdb/gdb-13.1.tar.xz
+# 解压gdb源码压缩包
+tar -xvf gdb-13.1.tar.xz
+# 进入gdb源码目录
+cd gdb-13.1
+mkdir build && cd build
+# 配置编译选项，这里只编译riscv64-unknown-elf一个目标文件
+../configure --prefix=/usr/local --target=riscv64-unknown-elf --enable-tui=yes
+
+# 开始编译，这里编译可能消耗较长时间，具体时长取决于机器性能
+make -j2
+# 编译完成后进行安装
+sudo make install
+```
+
 ## 裸机程序
 
 和应用程序的开发不同，裸机程序直接在硬件上运行、不依赖操作系统或其他软件层的程序。操作系统的开发就是裸机开发，直接与硬件交互，此时没有操作系统提供的抽象：文件系统、进程管理、设备驱动、虚拟化等
@@ -227,7 +251,7 @@ qemu 是一个可以模拟计算机硬件的程序，提供了两种模拟方式
 
 ## C 与 汇编的协同
 
-
+// TODO
 
 
 
@@ -273,3 +297,72 @@ qemu 会模拟计算机的启动过程，可以划分为以下几个过程：
 
 ## 配置 vscode 调试
 
+vscode 的调试依赖在 .vscode 文件夹下的两个配置文件：launch.json 和 task.json，下面是参考的两个配置文件：
+
+- launch.json
+```json
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "debug xv6",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/kernel/kernel",
+            "args": [],
+            "stopAtEntry": true,
+            "cwd": "${workspaceFolder}",
+            "miDebuggerServerAddress": "localhost:26001",
+            "miDebuggerPath": "/usr/local/bin/riscv64-unknown-elf-gdb",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "pretty printing",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "logging": {
+                 "engineLogging": false,
+                 "programOutput": true,
+            },
+            "preLaunchTask": "xv6build",
+        }
+    ]
+}
+```
+- tasks.json
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+      {
+          "label": "xv6build",
+          "type": "shell",
+          "isBackground": true,
+          "command": "make CPUS=1 qemu-gdb",
+          "problemMatcher": [
+              {
+                  "pattern": [
+                      {
+                          "regexp": ".",
+                          "file": 1,
+                          "location": 2,
+                          "message": 3
+                      }
+                  ],
+                  "background": {
+                      "beginsPattern": ".*Now run 'gdb' in another window.",
+                      "endsPattern": "."
+                  }
+              }
+          ]
+      }
+  ]
+}
+```
+- 使用 vscode 调试比较方便，但是在一些特定的场景下还是使用 gdb 调试比较好
+- 可以在调试控制台加上 -exec 执行 gdb 命令
+- 使用 vscode 调试需要在 .gdbinit 文件中的 target remote 127.0.0.1:1234 一行加上 # 注释
